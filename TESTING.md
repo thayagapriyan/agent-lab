@@ -9,7 +9,7 @@ how a sweep is run.
 > [DEVELOPMENT.md](DEVELOPMENT.md) → **TESTING.md** → [DEPLOYMENT.md](DEPLOYMENT.md)
 > ▶. Covers local + smoke testing of memory behavior. Why we measure →
 > [IDEA.md](IDEA.md); results land in [RESULTS.md](RESULTS.md). Full map:
-> [documentation map](ITERATION.md#documentation-map).
+> [documentation map](AGENTS.md#documentation-map).
 
 ## What "testing" means here
 

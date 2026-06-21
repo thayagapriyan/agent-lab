@@ -7,9 +7,9 @@ This is the single design doc (it absorbed the former `ARCHITECTURE.md`).
 > ◀ Pipeline: [IDEA.md](IDEA.md) → **DESIGN.md** → [DEVELOPMENT.md](DEVELOPMENT.md)
 > → [TESTING.md](TESTING.md) → [DEPLOYMENT.md](DEPLOYMENT.md). The *why* behind the
 > design is in [DECISIONS.md](DECISIONS.md); the build plan is in
-> [ITERATION.md](ITERATION.md). Full map:
-> [documentation map](ITERATION.md#documentation-map). Change the design? Update the
-> relevant iteration in [ITERATION.md](ITERATION.md) and log it in
+> [DEVELOPMENT.md → Iterations](DEVELOPMENT.md#iterations--status--plan). Full map:
+> [documentation map](AGENTS.md#documentation-map). Change the design? Update the
+> relevant iteration in [DEVELOPMENT.md](DEVELOPMENT.md#iteration-plan) and log it in
 > [CHANGELOG.md](CHANGELOG.md).
 
 ## The big picture
@@ -60,6 +60,13 @@ The Strands agent itself. Responsibilities:
 
 The memory configuration is **injected**, not hardcoded — that is the seam the
 harness uses to sweep parameters (see [the configuration seam](#the-configuration-seam)).
+
+**Implemented in Iteration 1** (`agent/`): `config.py` (`AgentConfig` from env),
+`core.py` (`build_agent` / `run_once`), and `serve.py` (local CLI). The model is
+built behind a small **model factory** (`build_model`) so the same agent runs
+against real Bedrock or an injected mock — the offline smoke test uses the mock.
+Memory attachment and the `/ping` + `/invocations` HTTP contract are *not* here yet
+(Iterations 3 and 6).
 
 ### 2. Memory Layer (AgentCore Memory)
 

@@ -14,15 +14,17 @@ it produced across the pipeline docs.
 > [DECISIONS.md](DECISIONS.md). This file links the *request* to the *result*.
 >
 > **Append-only:** add new entries at the top, never rewrite or delete old ones.
-> For live status and the plan, see [ITERATION.md](ITERATION.md). For how the docs
-> fit together, see the [documentation map](ITERATION.md#documentation-map).
+> For live status and the plan, see
+> [DEVELOPMENT.md → Iterations](DEVELOPMENT.md#iterations--status--plan). For how the
+> docs fit together, see the [documentation map](AGENTS.md#documentation-map).
 
 ## How to add an entry
 
 - **Start each session** by adding an entry with the user's **requirement /
   request** before doing the work; fill the rest as you go.
 - Put the **newest entry at the top** (reverse-chronological).
-- Reference the iteration number from [ITERATION.md](ITERATION.md).
+- Reference the iteration number from
+  [DEVELOPMENT.md → Iterations](DEVELOPMENT.md#iterations--status--plan).
 - Record decisions, surprises, and gotchas — that is what helps the next agent.
 - Use absolute dates (`YYYY-MM-DD`), not "today" or "yesterday".
 
@@ -32,7 +34,7 @@ it produced across the pipeline docs.
 ## [YYYY-MM-DD] Iteration N — <short title>
 
 **Requirement / request:** <what the user asked for this session, in their terms>
-**Goal:** <the iteration goal, copied from ITERATION.md>
+**Goal:** <the iteration goal, copied from DEVELOPMENT.md>
 **Status after this entry:** <In progress | Done | Blocked>
 **Agent:** <model/name or human>
 
@@ -54,6 +56,107 @@ it produced across the pipeline docs.
 **Next:**
 - <what the following agent should pick up>
 ```
+
+---
+
+## [2026-06-21] Doc structure — folded ITERATION.md into DEVELOPMENT.md
+
+**Requirement / request:** "We don't need ITERATION.md — replace it with
+DEVELOPMENT.md, because DEVELOPMENT.md should take care of every iteration. Agents
+are still referring to ITERATION.md."
+**Goal:** Eliminate ITERATION.md; DEVELOPMENT.md becomes the read-first doc that
+owns the status board + iteration plan.
+**Status after this entry:** Done
+**Agent:** Claude (Opus 4.8)
+
+**What changed:**
+- Moved the **status board + iteration plan + parking lot** from `ITERATION.md` into
+  `DEVELOPMENT.md` (new "Iterations — status & plan" section; jump-links added to
+  the header). `DEVELOPMENT.md` is now the read-first doc.
+- Moved the **documentation map** into `AGENTS.md` (the contract that references all
+  docs), per the user's choice.
+- **Deleted `ITERATION.md`.**
+- Repointed every live `ITERATION.md` / `ITERATION.md#documentation-map` link across
+  `IDEA.md`, `DESIGN.md`, `TESTING.md`, `DEPLOYMENT.md`, `RESULTS.md`, `DECISIONS.md`,
+  and the CHANGELOG header to `DEVELOPMENT.md#iterations--status--plan` or
+  `AGENTS.md#documentation-map`.
+- Updated the working loop in `AGENTS.md` (orient via DEVELOPMENT.md; status updates
+  go to its board).
+
+**How the goal was achieved:**
+- Confirmed with the user where the doc map should live (AGENTS.md), then moved
+  content (not copied), deleted the file, and grepped repo-wide to repair all live
+  links. Historical CHANGELOG entries keep their original `ITERATION.md` references
+  (append-only); the one dangling link in the oldest entry was un-linked to text.
+
+**Decisions & trade-offs:**
+- Recorded as **ADR-011** (iterations in DEVELOPMENT.md, map in AGENTS.md), which
+  supersedes the ITERATION.md placement noted in ADR-005.
+- Trade-off: DEVELOPMENT.md is longer now; mitigated with jump-links and clear
+  section headers. Tracking group shrinks to RESULTS ↔ DECISIONS.
+
+**Gotchas / surprises:**
+- Many cross-links pointed at `ITERATION.md#documentation-map`; all repaired.
+
+**Docs updated:**
+- Deleted: `ITERATION.md`. Edited: `DEVELOPMENT.md`, `AGENTS.md`, `IDEA.md`,
+  `DESIGN.md`, `TESTING.md`, `DEPLOYMENT.md`, `RESULTS.md`, `DECISIONS.md`
+  (ADR-005 note + ADR-011), `CHANGELOG.md`.
+
+**Next:**
+- Iteration 2 — Create the AgentCore Memory resource.
+
+---
+
+## [2026-06-21] Iteration 1 — Minimal local Strands agent
+
+**Requirement / request:** Start Iteration 1. User wants the smoke test to use the
+AWS CLI for verification and to add **Terraform** to provision the necessary AWS
+changes (Bedrock access only for now).
+**Goal:** A Strands agent that answers a prompt locally, no memory yet.
+**Status after this entry:** Done
+**Agent:** Claude (Opus 4.8)
+
+**What changed:**
+- `agent/` package: `config.py` (`AgentConfig` from `AWS_REGION` /
+  `BEDROCK_MODEL_ID`), `core.py` (`build_agent`, `run_once`, and a `build_model`
+  factory seam), `serve.py` (local CLI: `python -m agent.serve "prompt"`).
+- `infra/` Terraform (Bedrock access only): provider, IAM role + scoped
+  `bedrock:InvokeModel` policy, variables, outputs, `terraform.tfvars.example`.
+- `scripts/verify_bedrock.sh` — AWS CLI check of model availability (no invoke).
+- `tests/test_smoke.py` — mock round-trip + config tests (default), live Bedrock
+  test gated behind `RUN_LIVE=1`.
+- `.gitignore`, `requirements.txt`, `.env.example`.
+
+**How the goal was achieved:**
+- Built the agent behind a model factory so the same code runs against real
+  Bedrock or an injected mock. Created a venv, installed `requirements.txt`, and
+  ran the suite: **4 passed, 1 skipped** (live test skipped without `RUN_LIVE`).
+- Verified the real SDK API names used (`strands.Agent`,
+  `strands.models.BedrockModel`) against the installed package — not guessed.
+- `terraform validate` passes (fixed one provider-5.x deprecation:
+  `aws_region.name` → `.region`); `terraform fmt` applied.
+
+**Decisions & trade-offs:**
+- **Terraform** for infra (ADR-009) and **mock-default / `RUN_LIVE` opt-in** smoke
+  testing with an AWS CLI verifier (ADR-010) — both per user request.
+- Iteration 1 Terraform scope kept minimal: **Bedrock access only**; memory / ECR /
+  Runtime deferred to their iterations.
+
+**Gotchas / surprises:**
+- Local Python is 3.14 (docs floor is 3.10+ — fine).
+- Global interpreter had no pytest; created `.venv` and installed deps there.
+- AWS provider 5.x deprecates `data.aws_region.current.name` → use `.region`.
+
+**Docs updated:**
+- `DESIGN.md` (Agent Service now implemented + model-factory seam),
+  `DEVELOPMENT.md` (real setup/layout/commands), `DEPLOYMENT.md` (Terraform infra +
+  AWS CLI verify), `DECISIONS.md` (ADR-009, ADR-010), `ITERATION.md` (DoD ticked,
+  status board), `CHANGELOG.md`.
+
+**Next:**
+- Iteration 2 — Create the AgentCore Memory resource (extend `infra/` with the
+  memory resource; capture `MEMORY_ID`).
 
 ---
 
@@ -328,5 +431,5 @@ and make the experiment methodology sound.
   `ARCHITECTURE.md`.
 
 **Next:**
-- Iteration 1 — build the minimal local Strands agent (see
-  [ITERATION.md](ITERATION.md#iteration-1--minimal-local-strands-agent-)).
+- Iteration 1 — build the minimal local Strands agent. *(At the time this pointed
+  to `ITERATION.md`, since merged into DEVELOPMENT.md — see ADR-011.)*
