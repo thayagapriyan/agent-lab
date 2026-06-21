@@ -40,18 +40,34 @@ scope is Bedrock access only**: an IAM role + a narrowly-scoped policy granting
 `bedrock:InvokeModel` on the configured model. Memory, ECR, and Runtime resources
 are added in their own iterations.
 
+**Remote state (S3).** State lives in an S3 bucket — versioned, encrypted, with
+S3-native locking (ADR-012). The bucket is created once by a separate bootstrap
+config (it can't store its own state in the bucket it creates). In a **fresh
+clone**, run the bootstrap first:
+
 ```bash
-cd infra
+# 1) one-time: create the state bucket (uses LOCAL state)
+cd infra/bootstrap
+terraform init && terraform apply
+terraform output state_bucket_name      # matches the bucket in ../backend.tf
+
+# 2) the main config (uses the S3 backend from backend.tf)
+cd ..
 cp terraform.tfvars.example terraform.tfvars   # set region + model id
-terraform init
+terraform init                                 # configures the S3 backend
 terraform plan
 terraform apply
 terraform output                               # account, region, agent_role_arn
 ```
 
-State is local for this learning lab (git-ignored). To verify Bedrock access
-independently of Terraform, run the AWS CLI check:
-[`scripts/verify_bedrock.sh`](scripts/verify_bedrock.sh).
+> The bucket name is deterministic
+> (`agent-memory-lab-tfstate-<account-id>-<region>`) and hardcoded in
+> [`infra/backend.tf`](infra/backend.tf). If your account/region differ, update
+> that block to match the bootstrap output.
+
+State files are git-ignored; only the `.tf` config and `.terraform.lock.hcl` are
+committed. To verify Bedrock access independently of Terraform, run the AWS CLI
+check: [`scripts/verify_bedrock.sh`](scripts/verify_bedrock.sh).
 
 > **Verify against current docs.** AgentCore is evolving; confirm required IAM
 > actions, per-region service availability, the role's trust principal, and CLI

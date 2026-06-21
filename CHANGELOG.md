@@ -59,6 +59,46 @@ it produced across the pipeline docs.
 
 ---
 
+## [2026-06-21] Infra — moved Terraform state to S3 (remote backend)
+
+**Requirement / request:** "You did not use AWS for TF state?" — user wanted remote
+state on AWS instead of local.
+**Goal:** Move Terraform state to an S3 remote backend with locking.
+**Status after this entry:** Done
+**Agent:** Claude (Opus 4.8)
+
+**What changed:**
+- Added `infra/bootstrap/` (local state) that creates the state S3 bucket —
+  versioned, AES256-encrypted, public access fully blocked. Applied it: bucket
+  `agent-memory-lab-tfstate-224193574799-us-east-1` created.
+- Added `infra/backend.tf` — `backend "s3"` with `use_lockfile = true` (S3-native
+  locking, no DynamoDB). Migrated the existing local state with
+  `terraform init -migrate-state -force-copy`.
+- Verified: `main.tfstate` present in S3; `terraform plan` reads remote state and
+  reports **No changes** (existing IAM role/policy intact).
+
+**How the goal was achieved:**
+- Solved the bootstrap chicken-and-egg with a separate local-state config for the
+  bucket, then pointed the main config's backend at it and migrated.
+
+**Decisions & trade-offs:**
+- Recorded **ADR-012** (S3 state + native locking), superseding the "local state"
+  note in ADR-009. Used S3-native locking (Terraform ≥ 1.10) instead of a DynamoDB
+  lock table — simpler and cheaper.
+
+**Gotchas / surprises:**
+- Bucket that holds state can't be created by the config that uses it — hence the
+  bootstrap config. Fresh clones must run bootstrap once before `terraform init`.
+
+**Docs updated:**
+- `DEPLOYMENT.md` (remote-state workflow), `DECISIONS.md` (ADR-012 + ADR-009 note),
+  `CHANGELOG.md`. New: `infra/backend.tf`, `infra/bootstrap/main.tf`.
+
+**Next:**
+- Iteration 2 — Create the AgentCore Memory resource.
+
+---
+
 ## [2026-06-21] Iteration 1 — verified live against AWS + repo hygiene
 
 **Requirement / request:** "I merged Iteration 1 to main. How do I test it now?" —

@@ -153,11 +153,29 @@ when the design changes.
   reproducible or reviewable, and make teardown error-prone.
 - **Decision:** Define infrastructure as code in `infra/` using **Terraform**.
   Iteration 1 scope is **Bedrock access only** (IAM role + scoped
-  `bedrock:InvokeModel` policy); later resources are added per iteration. State is
-  local for this learning lab.
+  `bedrock:InvokeModel` policy); later resources are added per iteration.
+  *(State management: originally local; see ADR-012 — now remote in S3.)*
 - **Consequences:** Reproducible, reviewable, tear-down-able infra. Adds Terraform
-  as a tool dependency. Local state is fine solo; move to a remote backend if ever
-  shared. Verify AgentCore IAM principals/actions against current AWS docs.
+  as a tool dependency. Verify AgentCore IAM principals/actions against current AWS
+  docs.
+
+## ADR-012: Terraform state in S3 with native locking
+- **Status:** Accepted (supersedes the "local state" note in ADR-009)
+- **Date:** 2026-06-21
+- **Context:** Local state lives on one machine, can be lost, and can't be shared
+  across machines/agents or locked against concurrent applies. The project will run
+  from more than one place (local + cloud runtime later), so shared, durable state
+  is worth it.
+- **Decision:** Store main-config state in an **S3 bucket** (versioned, encrypted,
+  public-access-blocked) with **S3-native locking** (`use_lockfile = true`,
+  Terraform ≥ 1.10 — no DynamoDB table needed). The bucket is created once by a
+  separate `infra/bootstrap/` config that keeps **local** state (it can't store its
+  own state in the bucket it creates — the chicken-and-egg problem). Bucket name is
+  deterministic: `agent-memory-lab-tfstate-<account-id>-<region>`.
+- **Consequences:** State is durable, versioned, shareable, and locked. Adds a
+  one-time bootstrap step and a tiny S3 cost. Fresh clones must run
+  `infra/bootstrap` once before `terraform init` on the main config. State files are
+  git-ignored; only the `.tf` config and `.terraform.lock.hcl` are committed.
 
 ## ADR-010: Smoke test is mock-by-default, real Bedrock is opt-in
 - **Status:** Accepted
