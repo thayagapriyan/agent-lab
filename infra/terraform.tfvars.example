@@ -1,0 +1,4 @@
+# Copy to terraform.tfvars and adjust. terraform.tfvars is git-ignored.
+aws_region       = "us-east-1"
+bedrock_model_id = "anthropic.claude-3-5-haiku-20241022-v1:0"
+role_name        = "agent-memory-lab-bedrock"

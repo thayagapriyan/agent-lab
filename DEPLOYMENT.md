@@ -9,10 +9,9 @@ places; deployment requires no code changes.
 > ◀ Pipeline: [IDEA.md](IDEA.md) → [DESIGN.md](DESIGN.md) →
 > [DEVELOPMENT.md](DEVELOPMENT.md) → [TESTING.md](TESTING.md) → **DEPLOYMENT.md**
 > (last stage). Local setup & commands are in [DEVELOPMENT.md](DEVELOPMENT.md).
-> Full map: [documentation map](ITERATION.md#documentation-map). Deployment is built
-> in [Iteration 6](ITERATION.md#iteration-6--deploy-to-agentcore-runtime-); the
-> memory resource in
-> [Iteration 2](ITERATION.md#iteration-2--create-agentcore-memory-resource-).
+> Full map: [documentation map](AGENTS.md#documentation-map). Deployment is built in
+> Iteration 6; the memory resource in Iteration 2 — see the
+> [iteration plan](DEVELOPMENT.md#iteration-plan).
 
 ---
 
@@ -34,9 +33,29 @@ Bedrock.
   CLI can help provision the execution role; verify exact required permissions
   against current AWS docs.
 
+### Provisioning with Terraform (`infra/`)
+
+Infrastructure is defined as code in [`infra/`](infra/) (Terraform). **Iteration 1
+scope is Bedrock access only**: an IAM role + a narrowly-scoped policy granting
+`bedrock:InvokeModel` on the configured model. Memory, ECR, and Runtime resources
+are added in their own iterations.
+
+```bash
+cd infra
+cp terraform.tfvars.example terraform.tfvars   # set region + model id
+terraform init
+terraform plan
+terraform apply
+terraform output                               # account, region, agent_role_arn
+```
+
+State is local for this learning lab (git-ignored). To verify Bedrock access
+independently of Terraform, run the AWS CLI check:
+[`scripts/verify_bedrock.sh`](scripts/verify_bedrock.sh).
+
 > **Verify against current docs.** AgentCore is evolving; confirm required IAM
-> actions, per-region service availability, and CLI commands against current AWS
-> documentation before relying on specifics here.
+> actions, per-region service availability, the role's trust principal, and CLI
+> commands against current AWS documentation before relying on specifics here.
 
 ### The memory resource
 

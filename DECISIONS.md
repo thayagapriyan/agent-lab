@@ -8,8 +8,9 @@ when the design changes.
 > Difference from the other docs: [CHANGELOG.md](CHANGELOG.md) records *what
 > happened, when*; [DESIGN.md](DESIGN.md) records *what the design is now*; this
 > file records *why the design is that way*. Part of the tracking group:
-> [ITERATION.md](ITERATION.md) ↔ [RESULTS.md](RESULTS.md) ↔ **DECISIONS.md**. For
-> the doc map, see the [documentation map](ITERATION.md#documentation-map).
+> [RESULTS.md](RESULTS.md) ↔ **DECISIONS.md** (the status board lives in
+> [DEVELOPMENT.md](DEVELOPMENT.md#iterations--status--plan)). For the doc map, see
+> the [documentation map](AGENTS.md#documentation-map).
 
 ## How to add a decision
 
@@ -115,14 +116,59 @@ when the design changes.
   results are treated as indicative, not definitive. Single-parameter sweeps stay
   the default (ADR-003); multi-parameter grids are a deliberate later step.
 
-## ADR-005: Two-file docs split (status vs. history)
-- **Status:** Accepted
+## ADR-005: Separate mutable status from immutable history
+- **Status:** Accepted (updated — see ADR-011)
 - **Date:** 2026-06-21
 - **Context:** A single combined doc mixes a mutable plan with an immutable log and
   grows unwieldy; agents need one clear "where are we" entry point.
-- **Decision:** [ITERATION.md](ITERATION.md) is the mutable status board + plan
-  (read first); [CHANGELOG.md](CHANGELOG.md) is the append-only history. Reasoning
-  lives here in DECISIONS.md; results in [RESULTS.md](RESULTS.md).
-- **Consequences:** The status board stays short, history stays honest, and each
+- **Decision:** The mutable status board + iteration plan is kept separate from the
+  append-only history ([CHANGELOG.md](CHANGELOG.md)). Reasoning lives in this file;
+  results in [RESULTS.md](RESULTS.md). *(The status board originally lived in a
+  standalone `ITERATION.md`; ADR-011 later folded it into
+  [DEVELOPMENT.md](DEVELOPMENT.md#iterations--status--plan).)*
+- **Consequences:** The status board stays focused, history stays honest, and each
   doc has one job. Cost: agents must keep several files in sync (enforced by the
   [agent working loop](AGENTS.md#agent-working-loop)).
+
+## ADR-011: Iterations live in DEVELOPMENT.md; doc map lives in AGENTS.md
+- **Status:** Accepted (supersedes the ITERATION.md placement in ADR-005)
+- **Date:** 2026-06-21
+- **Context:** A standalone `ITERATION.md` split "how to build" from "what's the
+  status of the build," and agents kept treating it as a separate source of truth.
+  The user wanted one read-first doc that owns the iterations.
+- **Decision:** Fold the status board + iteration plan into
+  [DEVELOPMENT.md](DEVELOPMENT.md#iterations--status--plan) (now the read-first doc),
+  and move the documentation map into [AGENTS.md](AGENTS.md#documentation-map) (the
+  contract that references all docs). Delete `ITERATION.md`. The tracking group
+  becomes [RESULTS.md](RESULTS.md) ↔ [DECISIONS.md](DECISIONS.md).
+- **Consequences:** One fewer file; build + status read together. DEVELOPMENT.md is
+  longer (mitigated with jump-links and clear sections). All former
+  `ITERATION.md#...` links now point at DEVELOPMENT.md or AGENTS.md.
+
+## ADR-009: Provision AWS infrastructure with Terraform
+- **Status:** Accepted
+- **Date:** 2026-06-21
+- **Context:** The project needs AWS resources (IAM for Bedrock now; AgentCore
+  Memory, ECR, Runtime later). Ad-hoc console clicks or one-off scripts are not
+  reproducible or reviewable, and make teardown error-prone.
+- **Decision:** Define infrastructure as code in `infra/` using **Terraform**.
+  Iteration 1 scope is **Bedrock access only** (IAM role + scoped
+  `bedrock:InvokeModel` policy); later resources are added per iteration. State is
+  local for this learning lab.
+- **Consequences:** Reproducible, reviewable, tear-down-able infra. Adds Terraform
+  as a tool dependency. Local state is fine solo; move to a remote backend if ever
+  shared. Verify AgentCore IAM principals/actions against current AWS docs.
+
+## ADR-010: Smoke test is mock-by-default, real Bedrock is opt-in
+- **Status:** Accepted
+- **Date:** 2026-06-21
+- **Context:** A "prompt → response" smoke test that always calls Bedrock needs AWS
+  credentials and costs money on every run, so it can't run offline or in plain CI.
+  But a purely mocked test never proves the real Bedrock wiring.
+- **Decision:** The smoke test uses an **injected mock model by default** (free,
+  offline, proves agent wiring + the config seam). Setting **`RUN_LIVE=1`** runs an
+  additional test that calls real Bedrock. A separate AWS CLI script
+  (`scripts/verify_bedrock.sh`) checks model access without invoking the model.
+- **Consequences:** Fast, free, always-green default; real verification on demand.
+  Requires a model-factory seam in the agent (`build_model`) — which also matches
+  the project's "inject, don't hardcode" philosophy (ADR-002).

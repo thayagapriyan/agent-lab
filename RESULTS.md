@@ -5,11 +5,11 @@
 [IDEA.md](IDEA.md#success-criteria), success is: run a sweep, read a table here,
 and explain *why* the agent remembered (or forgot).
 
-> Empty until [Iteration 5](ITERATION.md#iteration-5--sweep-harness-) produces the
-> first sweep. Each sweep gets its own section, appended below. For the reasoning
-> behind the methodology, see [DECISIONS.md](DECISIONS.md); for what was done when,
-> see [CHANGELOG.md](CHANGELOG.md). Doc map:
-> [documentation map](ITERATION.md#documentation-map).
+> Empty until [Iteration 5](DEVELOPMENT.md#iteration-plan) produces the first
+> sweep. Each sweep gets its own section, appended below. For the reasoning behind
+> the methodology, see [DECISIONS.md](DECISIONS.md); for what was done when, see
+> [CHANGELOG.md](CHANGELOG.md). Doc map:
+> [documentation map](AGENTS.md#documentation-map).
 
 ## How to record a sweep
 

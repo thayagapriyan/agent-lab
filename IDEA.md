@@ -3,9 +3,10 @@
 > Pipeline: **IDEA.md** (start here) → [DESIGN.md](DESIGN.md) →
 > [DEVELOPMENT.md](DEVELOPMENT.md) → [TESTING.md](TESTING.md) →
 > [DEPLOYMENT.md](DEPLOYMENT.md) ▶. This is the **why** of the project — the human
-> idea a design grows from. For status & plan, see [ITERATION.md](ITERATION.md);
-> for how to work in the repo, see [AGENTS.md](AGENTS.md). Full map:
-> [documentation map](ITERATION.md#documentation-map).
+> idea a design grows from. For status & plan, see
+> [DEVELOPMENT.md](DEVELOPMENT.md#iterations--status--plan); for how to work in the
+> repo, see [AGENTS.md](AGENTS.md). Full map:
+> [documentation map](AGENTS.md#documentation-map).
 
 ## Project: Agent Memory Lab
 
