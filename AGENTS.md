@@ -1,110 +1,103 @@
 # AGENTS.md
 
-Guidance for AI coding assistants (and humans) working in the **Agent Memory Lab**
-repo. This file follows the `AGENTS.md` convention: a single place that tells a
-coding agent how the project is built, what the conventions are, and what to be
-careful about. Read it before making changes.
+The **contract for any agent (AI or human) working in this repo**. This file
+follows the `AGENTS.md` convention: the one place that tells a coding agent how to
+behave here and where to find everything else. Read it before making changes.
+
+For *how to build/run* the project, see [DEVELOPMENT.md](DEVELOPMENT.md); this file
+is about the **working loop and conventions**, not setup.
 
 ## What this project is
 
-A Python Strands agent deployed to Amazon Bedrock AgentCore Runtime, plus a harness
-that **tests the agent's memory by sweeping parameters**. See `IDEA.md` for the
-concept and `ARCHITECTURE.md` for the design. The point of the codebase is the
-experiment, so changes should preserve the ability to sweep one memory parameter at
-a time against a fixed probe set.
+A Python Strands agent on Amazon Bedrock AgentCore Runtime, plus a harness that
+**tests the agent's memory by sweeping parameters**. See [IDEA.md](IDEA.md) for the
+concept and [DESIGN.md](DESIGN.md) for the design. The point of the codebase is the
+experiment, so changes must preserve the ability to sweep one memory parameter at a
+time against a fixed probe set.
 
-## Tech stack
+> **Start here:** before doing anything, read [ITERATION.md](ITERATION.md) — the
+> live status board that tells you what to work on next. The
+> [documentation map](ITERATION.md#documentation-map) explains how all the `.md`
+> files fit together.
 
-- **Language:** Python (3.10+). Python is required — the full AgentCore Memory
-  system lives in the Python SDK; the TypeScript Memory module is not ready.
-- **Agent SDK:** Strands (`strands-agents`).
-- **Memory:** AgentCore Memory via `bedrock-agentcore[strands-agents]`.
-- **Runtime:** Amazon Bedrock AgentCore Runtime.
-- **Model:** a Bedrock-hosted model (model ID via env var).
+## How the docs are organized
 
-## Setup
+The docs fall into two interlinked groups, plus this file which references both:
 
-```bash
-python -m venv .venv && source .venv/bin/activate
-pip install strands-agents 'bedrock-agentcore[strands-agents]'
-# plus whatever the harness needs (e.g. a CSV/table lib)
-```
+- **Pipeline (the product docs)** — the lifecycle of the work, in order:
+  [IDEA.md](IDEA.md) → [DESIGN.md](DESIGN.md) → [DEVELOPMENT.md](DEVELOPMENT.md) →
+  [TESTING.md](TESTING.md) → [DEPLOYMENT.md](DEPLOYMENT.md). A human idea flows down
+  this chain into a deployed, tested system.
+- **Tracking (the process docs)** — [ITERATION.md](ITERATION.md) ↔
+  [RESULTS.md](RESULTS.md) ↔ [DECISIONS.md](DECISIONS.md): what to do, what we
+  found, and why we chose what we chose.
+- **Session log** — [CHANGELOG.md](CHANGELOG.md): every user session starts here
+  with the request, and it records which pipeline/tracking docs changed as a result.
 
-Required environment variables:
+## Agent working loop
 
-- `AWS_REGION`
-- `BEDROCK_MODEL_ID`
-- `MEMORY_ID` — from the created AgentCore Memory resource
-- `ACTOR_ID`, `SESSION_ID` — usually generated per run (timestamped)
+**Every agent (AI or human) follows this loop, every session.** It is the contract
+that keeps the docs in sync with the code so the next agent can pick up cleanly.
 
-## Project layout (target)
+1. **Log the request.** Start a new [CHANGELOG.md](CHANGELOG.md) entry capturing the
+   user's requirement/request for this session (newest on top).
+2. **Orient.** Read [ITERATION.md](ITERATION.md) — find the current iteration and
+   the next unchecked task. Pull context as needed: [IDEA.md](IDEA.md) (why),
+   [DESIGN.md](DESIGN.md) (how it's built), [DEVELOPMENT.md](DEVELOPMENT.md) (how to
+   run it).
+3. **Pick** the next task in the current iteration (or start the next iteration if
+   the current one is done). Set its status to 🔵 In progress in the status board.
+4. **Work**, following the conventions and gotchas in
+   [DEVELOPMENT.md](DEVELOPMENT.md) and the testing method in
+   [TESTING.md](TESTING.md).
+5. **Sync the docs** — do not finish with docs out of date. Update the file whose
+   job covers what you changed (one fact lives in one file):
+   - *Pipeline docs:* Purpose/scope → [IDEA.md](IDEA.md). Design/data flow →
+     [DESIGN.md](DESIGN.md). Build/run/conventions → [DEVELOPMENT.md](DEVELOPMENT.md).
+     Testing method → [TESTING.md](TESTING.md). Deploy / AWS / IAM / cost →
+     [DEPLOYMENT.md](DEPLOYMENT.md).
+   - *Tracking docs:* Status/progress → [ITERATION.md](ITERATION.md#status-board)
+     (always: tick the box, update the board). Sweep tables → [RESULTS.md](RESULTS.md).
+     A costly-to-reverse choice → an ADR in [DECISIONS.md](DECISIONS.md).
+6. **Close out.** Finish the [CHANGELOG.md](CHANGELOG.md) entry describing **how**
+   you achieved the goal and which docs changed. At iteration end (or when the user
+   stops), make sure [RESULTS.md](RESULTS.md) and [DECISIONS.md](DECISIONS.md)
+   reflect what was found and decided.
 
-```
-agent/        # Strands agent definition + tools + /ping, /invocations
-memory/       # memory config builders, session-manager wiring
-harness/      # sweep runner, scoring, table/CSV output
-probes/       # fixed probe set (seed, question, expected)
-scripts/      # one-time setup: create memory resource, IAM role
-```
+> **Golden rule:** the docs are the interface between agents. Never leave them out
+> of sync with the code at the end of a session. **One fact lives in one file** —
+> update it where it lives; don't duplicate it elsewhere.
 
-## Common commands
+## The core conventions (don't break these)
 
-```bash
-# Run the agent locally
-python -m agent.serve
-
-# Run the parameter sweep
-python -m harness.run --sweep top_k --values 1,3,5,10
-
-# Deploy to AgentCore Runtime
-agentcore deploy
-
-# Tail runtime logs
-aws logs tail /aws/bedrock-agentcore/runtimes/<name> --region $AWS_REGION --since 1h
-```
-
-> The `agentcore` CLI works the same for Python and TypeScript agents; the
-> deployment flow is identical across both.
-
-## Conventions
+Full detail in [DEVELOPMENT.md](DEVELOPMENT.md#conventions); the non-negotiables:
 
 - **Inject memory config; never hardcode it.** All tunable memory settings flow
-  through a single config object the harness can vary. If you find yourself
-  editing agent logic to change a memory setting, stop — lift it into the config.
-- **One parameter per sweep.** A run changes exactly one memory parameter and
-  holds the rest constant. Multi-parameter changes make results uninterpretable.
-- **Keep the probe set fixed.** Don't edit `probes/` to make a run look better. If
-  the probe set changes, prior results are no longer comparable; note it loudly.
-- **Externalize config to env vars.** No hardcoded region, model ID, or memory ID.
-- **One agent per session.** The AgentCore memory session manager currently
-  supports a single agent per session. Don't attach multiple.
-
-## Critical gotchas (read before touching memory code)
-
-1. **Flush buffered memory.** When `batch_size > 1`, messages are buffered and
-   only written when the buffer fills. Always use a context manager or call
-   `close()` in a `finally` block when the session ends, or buffered memories are
-   lost — and the harness will report falsely low recall.
-2. **Namespace consistency.** The namespace set at strategy-creation time must
-   match the one referenced at retrieval. A mismatch returns nothing, silently.
-3. **Warm up before timing.** The first invocation after deploy is a cold start;
-   discard it before recording latency, or your numbers are skewed.
-4. **Verify SDK field names against current docs.** The AgentCore Memory SDK
-   evolves. Don't trust parameter names from memory or from older examples —
-   confirm against the current AWS docs before relying on them.
-
-## When extending
-
-- Adding a new sweepable parameter? Wire it through the config object and the
-  harness's sweep selector; don't special-case it in agent logic.
-- Adding probes? Add them as `(seed, question, expected)` triples and treat the
-  expanded set as a new baseline — re-run prior configs if you need comparison.
-- Considering a TypeScript port? Possible for the agent + Runtime deployment, but
-  you'd hand-build the memory layer today since the managed Memory module isn't in
-  the TS SDK yet. Confirm the SDK's current state before committing to it.
+  through one config object the harness varies. Editing agent logic to change a
+  memory setting is the signal you've broken the design — lift it into the config.
+- **One parameter per sweep.** Clean attribution; multi-parameter changes make
+  results uninterpretable.
+- **Keep the probe set fixed.** Don't edit `probes/` to flatter a run; a changed
+  probe set is a new baseline — say so loudly.
+- **One agent, one session per run.** Don't attach multiple agents to a session.
 
 ## Scope guardrails
 
 This is a **learning lab, not production**. Don't add auth hardening, multi-tenancy,
 SLAs, or large benchmark suites unless explicitly asked — they work against the
-project's purpose, which is a small, fast, repeatable memory experiment.
+project's purpose: a small, fast, repeatable memory experiment.
+
+## Where everything lives
+
+| Need | File | Group |
+|------|------|-------|
+| What to work on next / status | [ITERATION.md](ITERATION.md) | Tracking |
+| Sweep results | [RESULTS.md](RESULTS.md) | Tracking |
+| Why decisions were made (ADRs) | [DECISIONS.md](DECISIONS.md) | Tracking |
+| Why the project exists + memory taxonomy | [IDEA.md](IDEA.md) | Pipeline |
+| The design (big picture + detail) | [DESIGN.md](DESIGN.md) | Pipeline |
+| Setup, commands, conventions, gotchas | [DEVELOPMENT.md](DEVELOPMENT.md) | Pipeline |
+| How we test memory (local + smoke) | [TESTING.md](TESTING.md) | Pipeline |
+| Deploy + AWS, IAM, cost, teardown | [DEPLOYMENT.md](DEPLOYMENT.md) | Pipeline |
+| This session's request + history | [CHANGELOG.md](CHANGELOG.md) | Session log |
+| How to behave here (this file) | [AGENTS.md](AGENTS.md) | Meta |

@@ -1,0 +1,149 @@
+# DEPLOYMENT.md
+
+How to deploy **Agent Memory Lab** and the AWS infrastructure it runs on — from
+local runs to Amazon Bedrock AgentCore Runtime, including account/IAM setup, the
+memory resource, environment values, and **cost & teardown**. (This doc absorbed
+the former `INFRASTRUCTURE.md`.) The headline: the **same agent code** runs both
+places; deployment requires no code changes.
+
+> ◀ Pipeline: [IDEA.md](IDEA.md) → [DESIGN.md](DESIGN.md) →
+> [DEVELOPMENT.md](DEVELOPMENT.md) → [TESTING.md](TESTING.md) → **DEPLOYMENT.md**
+> (last stage). Local setup & commands are in [DEVELOPMENT.md](DEVELOPMENT.md).
+> Full map: [documentation map](ITERATION.md#documentation-map). Deployment is built
+> in [Iteration 6](ITERATION.md#iteration-6--deploy-to-agentcore-runtime-); the
+> memory resource in
+> [Iteration 2](ITERATION.md#iteration-2--create-agentcore-memory-resource-).
+
+---
+
+## Part 1 — Infrastructure (AWS prerequisites)
+
+Read this before Iteration 2 (creating the memory resource) or any run that touches
+Bedrock.
+
+### Prerequisites
+
+- An **AWS account** with access to:
+  - **Amazon Bedrock** (and the specific model in `BEDROCK_MODEL_ID` enabled in
+    your region — Bedrock model access is opt-in per model).
+  - **Bedrock AgentCore** (Memory + Runtime).
+- **AWS credentials** configured locally (e.g. via `aws configure` or environment
+  credentials) for the same account/region.
+- An **IAM role/permissions** allowing the agent and CLI to call Bedrock, AgentCore
+  Memory, AgentCore Runtime, CloudWatch Logs, and (for deploy) ECR. The `agentcore`
+  CLI can help provision the execution role; verify exact required permissions
+  against current AWS docs.
+
+> **Verify against current docs.** AgentCore is evolving; confirm required IAM
+> actions, per-region service availability, and CLI commands against current AWS
+> documentation before relying on specifics here.
+
+### The memory resource
+
+The agent depends on a **managed AgentCore Memory resource**, created **once** and
+then referenced by ID:
+
+- Created via the `agentcore` CLI or a setup script in `scripts/` (Iteration 2).
+- Configure at least one **strategy** to start (begin with *semantic*).
+- Write down the **namespace scheme** — the namespace set at strategy-creation time
+  must match the one referenced at retrieval, or retrieval silently returns nothing
+  (see gotchas in [DEVELOPMENT.md](DEVELOPMENT.md)).
+- The resulting **`MEMORY_ID`** is consumed by the agent (local *and* deployed) via
+  env var.
+
+### Environment / config values
+
+Externalize so nothing is hardcoded (ADR-002). A `.env` (git-ignored) or your shell
+environment should provide:
+
+| Variable | Meaning | Source |
+|----------|---------|--------|
+| `AWS_REGION` | Region for Bedrock + AgentCore | your choice (must have the services) |
+| `BEDROCK_MODEL_ID` | The Bedrock model the agent uses | enabled Bedrock model |
+| `MEMORY_ID` | The created AgentCore Memory resource | output of Iteration 2 setup |
+| `ACTOR_ID` | Who the memories belong to | generated per run (often timestamped) |
+| `SESSION_ID` | The conversation/session scope | generated per run (often timestamped) |
+
+> **Never commit credentials or a real `.env`.** Keep secrets out of git.
+
+---
+
+## Part 2 — Deploying
+
+### Local vs. AgentCore Runtime
+
+| Concern | Local | AgentCore Runtime |
+|---------|-------|-------------------|
+| Entry point | HTTP server / direct calls | `/ping` + `/invocations` |
+| Packaging | venv | Docker image in ECR |
+| Memory | same memory resource by ID | same memory resource by ID |
+| Isolation | single process | per-session microVM |
+| Observability | console logs | CloudWatch + OpenTelemetry |
+
+The agent exposes the AgentCore HTTP contract (`/ping` health check, `/invocations`
+for prompts) so the *same* code serves locally and in the Runtime.
+
+### Deploy commands
+
+```bash
+# Deploy to AgentCore Runtime
+agentcore deploy
+
+# Tail runtime logs
+aws logs tail /aws/bedrock-agentcore/runtimes/<name> --region $AWS_REGION --since 1h
+```
+
+Deploy with the `agentcore` CLI. The Runtime provides session isolation, persistent
+memory, and observability without app changes. The same CLI flow works for Python
+and TypeScript agents.
+
+### What carries over from local
+
+- **The memory resource** — referenced by `MEMORY_ID`; the Runtime points at the
+  same resource you used locally.
+- **Environment values** — `AWS_REGION`, `BEDROCK_MODEL_ID`, `MEMORY_ID`, etc. must
+  be present in the Runtime environment too.
+
+### Deployment gotchas
+
+- **Cold-start latency.** The first invocation after deploy is a cold start; warm up
+  before recording any latency numbers, or your timing is skewed. (Also in the
+  [testing method](TESTING.md#handling-nondeterminism) and
+  [DEVELOPMENT.md gotchas](DEVELOPMENT.md#critical-gotchas-read-before-touching-memory-code).)
+- **Same memory ID, both environments.** A mismatched `MEMORY_ID` between local and
+  Runtime means you're testing against a different store — recall scores won't line
+  up. Keep it identical.
+- **Verify the CLI/SDK flow against current docs.** The `agentcore` deploy flow
+  evolves; confirm command names and required IAM permissions against current AWS
+  docs before relying on them.
+
+---
+
+## Part 3 — Cost & teardown
+
+**This project costs real money to run.** It is a learning lab, but the AWS
+resources are billable:
+
+- **Bedrock model calls** — every probe turn is an inference call. A sweep =
+  (values) × (probes) × (repeats) calls, plus the no-memory baseline. Costs scale
+  with how big your sweeps are.
+- **AgentCore Memory** — storage and retrieval of memories.
+- **AgentCore Runtime** (once deployed) — compute while the runtime exists, plus
+  ECR image storage and CloudWatch logs.
+
+**Keep cost down:**
+
+- Keep the probe set small (it already is, by design — ADR-004).
+- Use modest sweep value lists; you don't need 20 values to see a trend.
+- Be deliberate about repeat count `N` for nondeterminism (more repeats = more
+  calls).
+
+**Tear down when done:**
+
+- Delete deployed AgentCore Runtimes you're no longer using.
+- Delete the memory resource if you don't need its stored memories (recreating it is
+  cheap; leaving it costs storage).
+- Remove ECR images and old CloudWatch log groups if cleaning up fully.
+
+> Confirm current Bedrock / AgentCore pricing in the AWS console or pricing pages
+> before running large sweeps — model and service pricing changes over time.
