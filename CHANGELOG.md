@@ -59,6 +59,60 @@ it produced across the pipeline docs.
 
 ---
 
+## [2026-06-21] Iteration 1 — verified live against AWS + repo hygiene
+
+**Requirement / request:** "I merged Iteration 1 to main. How do I test it now?" —
+user wanted to test Terraform + the agent against their **real AWS account** (not
+offline mocks).
+**Goal:** Prove Iteration 1 end to end on real AWS, and fix what the test surfaced.
+**Status after this entry:** Done
+**Agent:** Claude (Opus 4.8)
+
+**What changed:**
+- **Verified live:** `aws sts get-caller-identity` (account 224193574799),
+  `verify_bedrock.sh` OK, `terraform apply` created the IAM role + scoped policy,
+  and `agent.serve` did a real Bedrock round trip ("pong"); `RUN_LIVE=1` pytest
+  passed. Full suite still 4 passed / 1 skipped.
+- **Default model id changed** to `us.anthropic.claude-haiku-4-5-20251001-v1:0`
+  (the prior default wasn't in the account; `claude-3-haiku` is Legacy/blocked).
+  Updated `config.py`, `.env.example`, `infra/variables.tf`.
+- **IAM policy now handles inference profiles** (`infra/iam.tf`): allows InvokeModel
+  on both the `inference-profile/...` ARN and underlying `foundation-model/...` ARNs.
+- **Fixed doubled CLI output** (`core.py`: `callback_handler=None`).
+- **Auto-load `.env`** via optional `python-dotenv` (`config.py`, `requirements.txt`).
+- **Repo hygiene:** untracked `infra/.terraform/` (provider plugin) and all
+  `__pycache__/*.pyc` that a prior commit had added; `.gitignore` now keeps
+  `.terraform.lock.hcl` tracked (Terraform best practice) and ignores `**/.terraform/`.
+- Documented the Bedrock gotchas (inference profile, Legacy models, IAM breadth) in
+  `DEVELOPMENT.md`.
+
+**How the goal was achieved:**
+- Used the AWS CLI to discover which models/inference profiles were actually ACTIVE
+  in the account, switched to one, fixed the IAM policy to match, then confirmed a
+  real round trip and the gated live test.
+
+**Decisions & trade-offs:**
+- Track `.terraform.lock.hcl` (pins provider versions) but never the provider
+  binaries or local state.
+- Kept `python-dotenv` optional (graceful fallback) so real env vars still work.
+
+**Gotchas / surprises:**
+- Newer Claude models require the `us.`-prefixed inference profile id, not the bare
+  model id. `claude-3-haiku` is Legacy and blocked for inactive accounts.
+- A prior commit had tracked `.terraform/` provider files and `.pyc` despite
+  `.gitignore` (they were added before the ignore rule / via merge). Cleaned up.
+
+**Docs updated:**
+- `DEVELOPMENT.md` (gotchas), `CHANGELOG.md`. Code/infra: `agent/config.py`,
+  `agent/core.py`, `infra/iam.tf`, `infra/variables.tf`, `requirements.txt`,
+  `.env.example`, `.gitignore`.
+
+**Next:**
+- Iteration 2 — Create the AgentCore Memory resource (extend `infra/`; capture
+  `MEMORY_ID`).
+
+---
+
 ## [2026-06-21] Doc structure — folded ITERATION.md into DEVELOPMENT.md
 
 **Requirement / request:** "We don't need ITERATION.md — replace it with

@@ -106,7 +106,21 @@ cd infra && terraform init && terraform plan && terraform apply
 - **One agent per session.** The AgentCore memory session manager currently
   supports a single agent per session. Don't attach multiple.
 
-## Critical gotchas (read before touching memory code)
+## Critical gotchas
+
+**Bedrock model ids (learned in Iteration 1, verified live):**
+- **Newer Claude models need an inference profile, not the bare model id.** Invoking
+  `anthropic.claude-haiku-4-5-...` directly fails; use the cross-region profile id
+  `us.anthropic.claude-haiku-4-5-...`. List them with
+  `aws bedrock list-inference-profiles`.
+- **"Legacy" models can be blocked.** `claude-3-haiku-20240307` returned *"marked by
+  provider as Legacy and you have not been actively using the model"* — pick an
+  ACTIVE model.
+- **IAM for inference profiles is broader.** The role must allow `InvokeModel` on
+  *both* the `inference-profile/...` ARN and the underlying `foundation-model/...`
+  ARNs (any region the profile spans). `infra/iam.tf` handles this automatically.
+
+**Memory code (apply from Iteration 3 on):**
 
 1. **Flush buffered memory.** When `batch_size > 1`, messages are buffered and only
    written when the buffer fills. Always use a context manager or call `close()` in

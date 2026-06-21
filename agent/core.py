@@ -45,7 +45,13 @@ def build_agent(
     from strands import Agent  # type: ignore[import-not-found]
 
     model = model_factory(config)
-    return Agent(model=model, system_prompt=config.system_prompt)
+    # callback_handler=None disables Strands' default streaming-to-stdout, so the
+    # caller (serve.py / the harness) owns output and we don't print twice.
+    return Agent(
+        model=model,
+        system_prompt=config.system_prompt,
+        callback_handler=None,
+    )
 
 
 def run_once(prompt: str, agent: Optional[Any] = None) -> str:

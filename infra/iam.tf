@@ -22,6 +22,17 @@ resource "aws_iam_role" "agent" {
   }
 }
 
+# Newer Claude models are invoked through a cross-region inference profile (id with
+# a "us." prefix). Invoking a profile requires permission on BOTH the inference
+# profile ARN and the underlying foundation models it can route to (in any region
+# the profile spans). For a learning lab we scope to the configured model family
+# across regions; tighten if needed.
+locals {
+  is_inference_profile = startswith(var.bedrock_model_id, "us.") || startswith(var.bedrock_model_id, "global.")
+  # Strip the "us." / "global." prefix to get the underlying foundation-model id.
+  foundation_model_id = local.is_inference_profile ? join(".", slice(split(".", var.bedrock_model_id), 1, length(split(".", var.bedrock_model_id)))) : var.bedrock_model_id
+}
+
 data "aws_iam_policy_document" "bedrock_invoke" {
   statement {
     sid    = "InvokeConfiguredModel"
@@ -30,9 +41,12 @@ data "aws_iam_policy_document" "bedrock_invoke" {
       "bedrock:InvokeModel",
       "bedrock:InvokeModelWithResponseStream",
     ]
-    # Scope to the configured model (foundation-model ARN). Broaden only if a run
-    # genuinely needs more than one model.
-    resources = [
+    resources = local.is_inference_profile ? [
+      # The inference profile itself (in this account/region)...
+      "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:inference-profile/${var.bedrock_model_id}",
+      # ...and the underlying foundation models it routes to (any region).
+      "arn:aws:bedrock:*::foundation-model/${local.foundation_model_id}",
+      ] : [
       "arn:aws:bedrock:${var.aws_region}::foundation-model/${var.bedrock_model_id}",
     ]
   }

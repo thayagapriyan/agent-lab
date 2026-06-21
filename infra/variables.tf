@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "bedrock_model_id" {
   description = "Bedrock model id the agent invokes. Must be enabled in your account/region."
   type        = string
-  default     = "anthropic.claude-3-5-haiku-20241022-v1:0"
+  default     = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 }
 
 variable "role_name" {
