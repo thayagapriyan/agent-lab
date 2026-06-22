@@ -6,7 +6,7 @@
 # Iteration 3.
 #
 # NAMESPACE SCHEME (must match at retrieval time — a mismatch silently returns
-# nothing; see DEVELOPMENT.md gotchas). We scope semantic memories per actor:
+# nothing; see AGENTS.md gotchas). We scope semantic memories per actor:
 #
 #     semantic/{actorId}
 #

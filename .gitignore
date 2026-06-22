@@ -24,7 +24,7 @@ crash.log
 # Keep the lock file tracked (Terraform best practice — pins provider versions).
 # (.terraform.lock.hcl is intentionally NOT ignored.)
 
-# Sweep outputs (large/regenerable); RESULTS.md itself is tracked
+# Sweep outputs (large/regenerable); results are recorded in AGENTS.md
 *.csv
 
 # OS / editor

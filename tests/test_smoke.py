@@ -1,6 +1,6 @@
 """Iteration 1 smoke test: prompt -> response round trip.
 
-Two modes (see TESTING.md):
+Two modes (see AGENTS.md — How we test):
 
 * Default (mock): builds the agent with a fake model factory, so there are NO AWS
   calls and NO cost. Runs offline / in CI. Proves the agent wiring, the config

@@ -2,7 +2,7 @@
 
 Iteration 1 keeps this deliberately minimal: a CLI that sends one prompt to the
 agent and prints the reply. The AgentCore HTTP contract (/ping, /invocations)
-arrives in Iteration 6 (see DEPLOYMENT.md) — the same agent code, served two ways.
+arrives in Iteration 6 (see AGENTS.md) — the same agent code, served two ways.
 
 Usage:
     python -m agent.serve "your prompt here"

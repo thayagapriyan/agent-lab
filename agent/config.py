@@ -2,7 +2,7 @@
 
 Nothing about the model is hardcoded — region and model id come from the
 environment so the same code runs against any Bedrock model without edits
-(see the "externalize config" convention in DEVELOPMENT.md and ADR-002).
+(see the "externalize config" convention and ADR-002 in AGENTS.md).
 
 Memory-related config is intentionally absent in Iteration 1; it arrives in
 Iteration 3 as a separate injected object so the harness can sweep it.

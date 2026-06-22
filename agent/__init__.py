@@ -1,7 +1,7 @@
 """Agent Memory Lab — the Strands agent package.
 
 Iteration 1: a minimal agent that answers a prompt locally, no memory yet.
-See DESIGN.md (#1-agent-service) and DEVELOPMENT.md for context.
+See AGENTS.md (Architecture / Tech stack) for context.
 """
 
 from .config import AgentConfig, load_config
