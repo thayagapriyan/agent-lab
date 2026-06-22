@@ -15,7 +15,9 @@ name: Bootstrap OIDC
 #        AWS_BOOTSTRAP_SECRET_ACCESS_KEY
 #   2. Settings -> Secrets and variables -> Actions -> Variables -> New variable:
 #        AWS_REGION   e.g. us-east-1
-#        GITHUB_REPO  owner/repo, e.g. thayagapriyan/agent-lab
+#      (No repo variable for the GitHub repo is needed — infra/cicd.tf defaults
+#       github_repo to thayagapriyan/agent-lab. To override for a fork, set GH_REPO;
+#       do NOT use GITHUB_REPO — GitHub reserves the GITHUB_ prefix and rejects it.)
 #   3. Actions tab -> "Bootstrap OIDC" -> Run workflow.
 #   4. Read the workflow summary: copy the printed role ARN into a new Actions
 #      variable AWS_ROLE_ARN, then DELETE the two bootstrap secrets. Deploy then
@@ -49,12 +51,18 @@ jobs:
       # full deploy.yml run reconciles everything else. The OIDC provider already
       # exists account-wide and is consumed via a data source, so it isn't targeted
       # (nothing to create).
+      # github_repo defaults to thayagapriyan/agent-lab in infra/cicd.tf, so no var is
+      # needed for the common case. To override (e.g. a fork), set the GH_REPO Actions
+      # variable — NOT GITHUB_REPO: GitHub reserves the GITHUB_ prefix and rejects it.
       - name: Create deploy role
         working-directory: infra
+        env:
+          GH_REPO: ${{ vars.GH_REPO }}
         run: |
           terraform init
-          terraform apply -auto-approve \
-            -var "github_repo=${{ vars.GITHUB_REPO }}" \
+          REPO_ARG=""
+          if [ -n "$GH_REPO" ]; then REPO_ARG="-var=github_repo=$GH_REPO"; fi
+          terraform apply -auto-approve $REPO_ARG \
             -target=aws_iam_role.github_deploy \
             -target=aws_iam_role_policy_attachment.github_deploy_poweruser \
             -target=aws_iam_role_policy.github_deploy_iam \
