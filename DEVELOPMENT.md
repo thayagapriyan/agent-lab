@@ -168,7 +168,7 @@ Update this table whenever an iteration changes state.
 |-----------|------|--------|-------|
 | 0 | Project scaffold & docs wiring | ✅ Done | Doc system created. |
 | 1 | Minimal local Strands agent | ✅ Done | + Terraform (Bedrock access), AWS CLI verify. |
-| 2 | Create AgentCore Memory resource | ⬜ Not started | Setup + IDs in env. |
+| 2 | Create AgentCore Memory resource | ✅ Done | Terraform memory + semantic strategy; MEMORY_ID in env. |
 | 3 | Attach memory to the agent | ⬜ Not started | Inject config, one strategy. |
 | 4 | Probe set + scoring | ⬜ Not started | Fixed (seed, question, expected). |
 | 5 | Sweep harness | ⬜ Not started | Sweep one param, emit table/CSV. |
@@ -178,7 +178,7 @@ Update this table whenever an iteration changes state.
 **Status legend:** ⬜ Not started · 🔵 In progress · ✅ Done · ⚠️ Blocked
 
 **Currently in progress:** _none_
-**Next up:** Iteration 2 — Create AgentCore Memory resource.
+**Next up:** Iteration 3 — Attach memory to the agent.
 
 ## Iteration plan
 
@@ -222,15 +222,24 @@ enough to finish and document in one sitting.
 [Setup](#setup). API names (`strands.Agent`, `strands.models.BedrockModel`) verified
 against the installed SDK.
 
-### Iteration 2 — Create AgentCore Memory resource ⬜
+### Iteration 2 — Create AgentCore Memory resource ✅
 
 **Goal:** A managed memory resource exists and its ID is available to the agent.
 
 **Done when:**
-- [ ] One-time setup creates the memory resource (extend `infra/` and/or `scripts/`).
-- [ ] At least one strategy configured (start with *semantic*).
-- [ ] `MEMORY_ID` documented and consumed from env.
-- [ ] Namespace scheme written down (it must match at retrieval time).
+- [x] One-time setup creates the memory resource — Terraform `infra/memory.tf`
+      (`aws_bedrockagentcore_memory`). Verified ACTIVE via `get-memory`.
+- [x] At least one strategy configured — semantic
+      (`aws_bedrockagentcore_memory_strategy`, type `SEMANTIC`).
+- [x] `MEMORY_ID` documented and consumed from env (`terraform output memory_id`
+      → `.env`).
+- [x] Namespace scheme written down: **`semantic/{actorId}`** (per-actor; `{actorId}`
+      filled by AgentCore at runtime; must match at retrieval — see
+      [Deploy → memory resource](DEPLOYMENT.md#the-memory-resource)).
+
+**Notes / pointers:** memory creation takes ~2–3 min. Provider resources
+(`aws_bedrockagentcore_memory` / `_memory_strategy`) verified against AWS provider
+6.51. `event_expiry_duration` is in days (7–365); default 90.
 
 ### Iteration 3 — Attach memory to the agent ⬜
 

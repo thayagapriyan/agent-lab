@@ -76,15 +76,24 @@ check: [`scripts/verify_bedrock.sh`](scripts/verify_bedrock.sh).
 ### The memory resource
 
 The agent depends on a **managed AgentCore Memory resource**, created **once** and
-then referenced by ID:
+then referenced by ID. As of Iteration 2 it's defined in Terraform
+([`infra/memory.tf`](infra/memory.tf)):
 
-- Created via the `agentcore` CLI or a setup script in `scripts/` (Iteration 2).
-- Configure at least one **strategy** to start (begin with *semantic*).
-- Write down the **namespace scheme** — the namespace set at strategy-creation time
-  must match the one referenced at retrieval, or retrieval silently returns nothing
-  (see gotchas in [DEVELOPMENT.md](DEVELOPMENT.md)).
-- The resulting **`MEMORY_ID`** is consumed by the agent (local *and* deployed) via
-  env var.
+- **Resources:** `aws_bedrockagentcore_memory` (the store) +
+  `aws_bedrockagentcore_memory_strategy` (a `SEMANTIC` long-term strategy). Created
+  by the same `terraform apply` as the rest of `infra/`. **Provisioning takes
+  ~2–3 minutes.**
+- **`event_expiry_duration`** is in **days** (provider range 7–365; default 90).
+- **`MEMORY_ID`** comes from `terraform output memory_id`; set it in `.env`. It's
+  consumed by the agent (local *and* deployed).
+- **Namespace scheme — `semantic/{actorId}`** (the `memory_namespace` variable).
+  `{actorId}` is filled by AgentCore at runtime, so each actor's facts are recalled
+  across their sessions. ⚠️ **This namespace must match what the agent references at
+  retrieval time (Iteration 3), or recall silently returns nothing** (see gotchas in
+  [DEVELOPMENT.md](DEVELOPMENT.md#critical-gotchas)).
+- **Verify independently:**
+  `aws bedrock-agentcore-control get-memory --memory-id "$MEMORY_ID"` should show
+  `status: ACTIVE` and the semantic strategy.
 
 ### Environment / config values
 

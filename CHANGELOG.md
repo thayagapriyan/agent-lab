@@ -59,6 +59,53 @@ it produced across the pipeline docs.
 
 ---
 
+## [2026-06-22] Iteration 2 — Create AgentCore Memory resource
+
+**Requirement / request:** "Move to next iteration."
+**Goal:** A managed memory resource exists and its ID is available to the agent.
+**Status after this entry:** Done
+**Agent:** Claude (Opus 4.8)
+
+**What changed:**
+- `infra/memory.tf` — `aws_bedrockagentcore_memory` ("agent_memory_lab",
+  `event_expiry_duration = 90` days) + `aws_bedrockagentcore_memory_strategy`
+  (`SEMANTIC`, namespace `semantic/{actorId}`).
+- `infra/variables.tf` — `memory_name`, `memory_event_expiry_days` (validated 7–365),
+  `memory_namespace`. `infra/outputs.tf` — `memory_id`, `memory_arn`,
+  `memory_namespace`.
+- Applied: created `MEMORY_ID = agent_memory_lab-zergtDGRvm`; `get-memory` confirms
+  `status: ACTIVE` with the semantic strategy.
+- Wired `MEMORY_ID` + `MEMORY_NAMESPACE` into `.env`; updated `.env.example`.
+
+**How the goal was achieved:**
+- Verified the real API first: `aws bedrock-agentcore-control create-memory` exists
+  (strategies are a tagged union: semantic/summary/userPreference/custom). The
+  Terraform AWS provider (6.51) has native `aws_bedrockagentcore_memory` +
+  `aws_bedrockagentcore_memory_strategy` resources — so stayed in Terraform (ADR-009)
+  rather than a CLI script. Confirmed both schemas from the provider docs, applied,
+  and independently verified via `get-memory`.
+
+**Decisions & trade-offs:**
+- Namespace **`semantic/{actorId}`** (per-actor across sessions) — fits recall
+  experiments. Documented as the scheme that must match at retrieval (Iteration 3).
+- One strategy now (semantic). More strategies become a sweepable parameter later.
+
+**Gotchas / surprises:**
+- Memory creation took **~2m36s** — provisioning is slow; later applies should
+  expect a multi-minute wait on first create.
+- `event_expiry_duration` is in **days** (not the ISO-8601 string the CLI skeleton
+  implies) in the Terraform provider.
+
+**Docs updated:**
+- `DEPLOYMENT.md` (memory resource + namespace scheme), `DEVELOPMENT.md` (DoD,
+  status board), `.env.example`, `CHANGELOG.md`. New: `infra/memory.tf`.
+
+**Next:**
+- Iteration 3 — Attach memory to the agent (inject an `AgentCoreMemorySessionManager`
+  config; store a fact and recall it; reference `semantic/{actorId}`).
+
+---
+
 ## [2026-06-21] Infra — moved Terraform state to S3 (remote backend)
 
 **Requirement / request:** "You did not use AWS for TF state?" — user wanted remote
