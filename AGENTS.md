@@ -202,13 +202,14 @@ cd infra && terraform init && terraform plan && terraform apply
 ### Project layout
 
 ```
-agent/        # Strands agent: config.py (env), core.py (build/run + model factory), serve.py (CLI)
+agent/        # Strands agent: config.py (AgentConfig + MemoryConfig), core.py (build/run + model factory + memory attach), serve.py (CLI)
+memory/       # factory.py: MemoryConfig -> AgentCoreMemorySessionManager (the sweep seam); close_session_manager
 infra/        # Terraform: IAM (Bedrock invoke), memory.tf (AgentCore Memory), cicd.tf (OIDC deploy role), S3 backend
   bootstrap/      # one-time, LOCAL state: creates the S3 state bucket
 scripts/      # verify_bedrock.sh — AWS CLI check of model access
-tests/        # smoke test (mock by default, RUN_LIVE=1 for real Bedrock)
+tests/        # test_smoke.py + test_memory.py (mock by default, RUN_LIVE=1 for real Bedrock/memory)
 .github/workflows/  # bootstrap.yml (one-time OIDC) + deploy.yml (CI tests + TF apply)
-# planned: memory/ (Iter 3), probes/ (Iter 4), harness/ (Iter 5)
+# planned: probes/ (Iter 4), harness/ (Iter 5)
 ```
 
 ---
@@ -372,20 +373,21 @@ state.
 | 0 | Project scaffold & docs wiring | ✅ Done | Doc system created (later consolidated into this file). |
 | 1 | Minimal local Strands agent | ✅ Done | + Terraform (Bedrock access), AWS CLI verify, verified live on AWS. |
 | 2 | Create AgentCore Memory resource | ✅ Done | Terraform memory + semantic strategy; `MEMORY_ID` in env. |
-| 3 | Attach memory to the agent | ⬜ Not started | Inject config, one strategy; store a fact, recall it later. |
+| 3 | Attach memory to the agent | ✅ Done | Injected `MemoryConfig` → `memory/` session-manager factory; `enabled=False` = baseline. |
 | 4 | Probe set + scoring | ⬜ Not started | Fixed `(seed, question, expected)`; keyword match; latency. |
 | 5 | Sweep harness | ⬜ Not started | Sweep one param, no-memory baseline, emit table/CSV. |
 | 6 | Deploy to AgentCore Runtime | ⬜ Not started | `/ping` + `/invocations`, no code change. |
 | 7 | First full sweep + writeup | ⬜ Not started | Run, read the table, explain it. |
 
 **Legend:** ⬜ Not started · 🔵 In progress · ✅ Done · ⚠️ Blocked.
-**Next up:** Iteration 3 — Attach memory to the agent.
+**Next up:** Iteration 4 — Probe set + scoring.
 
 ### Definitions of done (the next few iterations)
 
-- **Iter 3:** `memory/` builds an `AgentCoreMemorySessionManager` from a config object;
-  agent stores a fact one turn and recalls it later; config injected, not hardcoded;
-  session always flushed/closed.
+- **Iter 3 ✅:** `memory/factory.py` builds an `AgentCoreMemorySessionManager` from the
+  injected `MemoryConfig`; `build_agent(memory_config=...)` attaches it; `enabled=False`
+  is the no-memory baseline; `close_session_manager` flushes buffered writes. Live
+  store-then-recall test gated behind `RUN_LIVE=1`.
 - **Iter 4:** `probes/` holds fixed triples; a scorer judges recall (start with
   keyword/substring); latency captured; scoring identical across runs.
 - **Iter 5:** `harness/` runs the full probe set per config; `--sweep <param> --values
