@@ -18,7 +18,16 @@ Run:  streamlit run ui/chat.py
 from __future__ import annotations
 
 import os
+import sys
 import uuid
+from pathlib import Path
+
+# Streamlit puts the script's own folder (ui/) on sys.path, not the repo root, so the
+# `agent`/`memory` packages aren't importable by default. Add the repo root (this
+# file's parent's parent) so `streamlit run ui/chat.py` works from anywhere.
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 import streamlit as st
 
@@ -51,13 +60,17 @@ if "agent" not in st.session_state:
         "your facts in a later conversation."
     )
 
+    # Default to the LAST actor used (so you can reuse it to test cross-session recall);
+    # only fall back to a fresh throwaway id the very first time.
+    default_actor = st.session_state.get("last_actor_id") or _suggested_actor_id()
+
     with st.form("identify"):
         actor_id = st.text_input(
             "Actor id (who are you?)",
-            value=_suggested_actor_id(),
+            value=default_actor,
             help="A stable id for the user — e.g. an email, a username, or a customer id. "
-            "Reuse the SAME id across visits to recall earlier facts. The pre-filled "
-            "value is a throwaway id for quick testing.",
+            "Reuse the SAME id across visits to recall earlier facts (this box keeps your "
+            "last id so you can). Long-term memories take ~1-2 min to extract after a chat.",
         )
         memory_enabled = st.toggle(
             "Memory ON",
@@ -91,6 +104,8 @@ if "agent" not in st.session_state:
         st.session_state.actor_id = mem_cfg.actor_id
         st.session_state.session_id = mem_cfg.session_id
         st.session_state.memory_enabled = memory_enabled
+        # Remembered across resets so the gate can offer it again (cross-session recall).
+        st.session_state.last_actor_id = mem_cfg.actor_id
         st.rerun()
 
     st.stop()
@@ -103,10 +118,11 @@ with st.sidebar:
     st.write(f"**Session:** `{st.session_state.session_id}`")
     st.write("**Memory:** " + ("🟢 ON (long-term)" if st.session_state.memory_enabled else "⚪ OFF (baseline)"))
     st.caption(
-        "Reuse the same **actor** id in a new session to test long-term recall across "
-        "conversations. Click below to start over as a different actor."
+        "To test long-term recall: teach a fact, wait ~1-2 min (facts extract "
+        "asynchronously), then **Reset** — the gate keeps this actor id, so just hit "
+        "Start again (new session, same actor) and ask."
     )
-    if st.button("New actor / reset"):
+    if st.button("Reset (keep actor for next session)"):
         _reset_chat()
         st.rerun()
 

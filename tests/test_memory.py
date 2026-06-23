@@ -146,3 +146,56 @@ def test_store_then_recall_live():
         close_session_manager(agent.memory_session_manager)
 
     assert "mango" in reply.lower(), f"expected recall of 'mango', got: {reply!r}"
+
+
+@pytest.mark.skipif(
+    os.getenv("RUN_LIVE") != "1",
+    reason="live memory test; set RUN_LIVE=1 (needs MEMORY_ID + AWS creds, costs a little)",
+)
+def test_memory_persists_across_sessions_live():
+    """The real long-term test: store in ONE session, recall in a DIFFERENT one.
+
+    Two separate agents are built — different session_id, SAME actor_id. The only link
+    between them is the actor, so recalling the fact in session 2 proves long-term
+    memory crossed the session boundary (not in-conversation short-term memory).
+
+    AgentCore extracts facts asynchronously, so session 2 polls with a short backoff
+    before giving up — and the number of attempts needed is itself a data point about
+    extraction latency (the kind of thing this lab measures).
+    """
+    import time
+    import uuid
+
+    from agent.config import load_config
+
+    actor = f"actor-xsession-{uuid.uuid4().hex[:8]}"  # one actor, shared by both sessions
+
+    # --- Session 1: store the fact, then tear the session down completely ---
+    store_cfg = load_memory_config(actor_id=actor, session_id=f"sess-A-{uuid.uuid4().hex[:6]}")
+    assert store_cfg.memory_id, "set MEMORY_ID in the environment for the live test"
+    agent1 = build_agent(config=load_config(), memory_config=store_cfg)
+    try:
+        agent1("Remember this: my favorite fruit is mango.")
+    finally:
+        close_session_manager(agent1.memory_session_manager)  # flush before session ends
+
+    # --- Session 2: a brand-new session for the SAME actor; must recall via memory ---
+    recall_cfg = load_memory_config(actor_id=actor, session_id=f"sess-B-{uuid.uuid4().hex[:6]}")
+    assert recall_cfg.session_id != store_cfg.session_id  # genuinely a different session
+
+    reply = ""
+    for attempt in range(6):  # ~ up to ~30s total, backing off for async extraction
+        agent2 = build_agent(config=load_config(), memory_config=recall_cfg)
+        try:
+            reply = str(agent2("What is my favorite fruit?"))
+        finally:
+            close_session_manager(agent2.memory_session_manager)
+        if "mango" in reply.lower():
+            break
+        time.sleep(5)
+
+    assert "mango" in reply.lower(), (
+        f"session 2 did not recall the fact stored in session 1 (same actor {actor}). "
+        f"Last reply: {reply!r}. If this is consistent, check the namespace matches the "
+        f"strategy's, or that extraction had time to complete."
+    )
