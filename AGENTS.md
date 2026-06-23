@@ -171,8 +171,12 @@ python -m pytest -q
 # Live smoke test against real Bedrock (needs creds + model access; costs a little)
 RUN_LIVE=1 python -m pytest -q tests/test_smoke.py::test_round_trip_live
 
-# Run the agent locally (one prompt)
+# Run the agent locally (one prompt; builds a fresh agent each call — no conversation)
 python -m agent.serve "hello, who are you?"
+
+# Chat GUI (the easy way to SEE memory work): keeps one agent across turns, asks for
+# an actor id first, toggle memory on/off to compare against the no-memory baseline.
+streamlit run ui/chat.py
 
 # Verify Bedrock access via AWS CLI (no model invocation)
 bash scripts/verify_bedrock.sh
@@ -204,6 +208,7 @@ cd infra && terraform init && terraform plan && terraform apply
 ```
 agent/        # Strands agent: config.py (AgentConfig + MemoryConfig), core.py (build/run + model factory + memory attach), serve.py (CLI)
 memory/       # factory.py: MemoryConfig -> AgentCoreMemorySessionManager (the sweep seam); close_session_manager
+ui/           # chat.py: Streamlit chat GUI — multi-turn, actor-id gate, memory on/off (manual testing, not the harness)
 infra/        # Terraform: IAM (Bedrock invoke), memory.tf (AgentCore Memory), cicd.tf (OIDC deploy role), S3 backend
   bootstrap/      # one-time, LOCAL state: creates the S3 state bucket
 scripts/      # verify_bedrock.sh — AWS CLI check of model access
@@ -288,6 +293,26 @@ score recall.
 
 The **smoke test** is mock-by-default (free, offline, proves agent wiring + the config
 seam); `RUN_LIVE=1` adds a real-Bedrock test (ADR-010).
+
+### Chat GUI — the easy way to see memory work
+
+`streamlit run ui/chat.py` opens a browser chat. Unlike the CLI (which builds a fresh
+agent per prompt, so it can't hold a conversation), the GUI keeps **one agent across
+turns** — so both memory layers are observable.
+
+- **It asks for an *actor id* before chatting.** That id is *who the memories belong to*
+  (namespace `semantic/{actorId}`). In a real app you'd pass the logged-in user's id; if
+  you don't have one, the form pre-fills a throwaway id. **Reuse the same actor id in a
+  later session to test long-term recall across conversations** — that's the whole point.
+- **Memory on/off toggle** runs the no-memory baseline (control) vs. memory, so you can
+  feel the difference directly.
+- **To test recall:** teach a fact ("my favorite fruit is mango"), then ask later. Within
+  one session, short-term recall works even with memory OFF. To prove *long-term* memory,
+  reset, start a **new session with the same actor id**, and ask again — only memory-ON
+  recalls it. Note AgentCore extracts facts asynchronously, so cross-session recall may
+  lag a few seconds after storing.
+
+Needs the same creds + `MEMORY_ID` as the live tests.
 
 ---
 
