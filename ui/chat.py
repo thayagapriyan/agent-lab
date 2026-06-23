@@ -43,12 +43,46 @@ def _suggested_actor_id() -> str:
 
 
 def _reset_chat() -> None:
-    """Tear down the current agent (flushing memory) and clear the conversation."""
+    """Tear down the current agent (flushing memory) and clear the conversation.
+
+    Keeps `last_actor_id` and re-seeds the input box with it, so after reset the gate
+    offers the same actor again (the cross-session recall workflow).
+    """
     agent = st.session_state.get("agent")
     if agent is not None:
         close_session_manager(getattr(agent, "memory_session_manager", None))
     for key in ("agent", "messages", "actor_id", "session_id", "memory_enabled"):
         st.session_state.pop(key, None)
+    # Re-seed the gate's input with the last actor so it's ready to reuse.
+    last = st.session_state.get("last_actor_id")
+    if last:
+        st.session_state.actor_id_input = last
+
+
+def _stored_memories(actor_id: str) -> list[str] | str:
+    """Query AgentCore for the long-term memories stored under this actor.
+
+    Returns a list of memory texts, or an error string. Lets the UI SHOW what the
+    agent actually remembers for the current actor — so an actor-id mismatch or
+    not-yet-extracted state is visible instead of mysterious.
+    """
+    import boto3
+
+    memory_id = os.getenv("MEMORY_ID", "")
+    if not memory_id:
+        return "MEMORY_ID not set."
+    try:
+        client = boto3.client("bedrock-agentcore", region_name=load_config().region)
+        resp = client.retrieve_memory_records(
+            memoryId=memory_id,
+            namespace=f"semantic/{actor_id}",
+            searchCriteria={"searchQuery": "everything about the user"},
+            maxResults=20,
+        )
+        texts = [r["content"]["text"] for r in resp.get("memoryRecordSummaries", [])]
+        return texts
+    except Exception as exc:  # surface ValidationException (bad actor id) etc.
+        return f"{type(exc).__name__}: {exc}"
 
 
 # ── Gate screen: identify the actor before chatting ───────────────────────────
@@ -60,14 +94,18 @@ if "agent" not in st.session_state:
         "your facts in a later conversation."
     )
 
-    # Default to the LAST actor used (so you can reuse it to test cross-session recall);
-    # only fall back to a fresh throwaway id the very first time.
-    default_actor = st.session_state.get("last_actor_id") or _suggested_actor_id()
+    # Seed the input's backing state ONCE (keyed widget), so Streamlit persists whatever
+    # you type across reruns instead of resetting to a freshly-generated UUID each run.
+    # Default to the last actor used (cross-session recall); else a one-time throwaway id.
+    if "actor_id_input" not in st.session_state:
+        st.session_state.actor_id_input = (
+            st.session_state.get("last_actor_id") or _suggested_actor_id()
+        )
 
     with st.form("identify"):
         actor_id = st.text_input(
             "Actor id (who are you?)",
-            value=default_actor,
+            key="actor_id_input",  # keyed → Streamlit owns/persists the value; no `value=`
             help="A stable id for the user — e.g. an email, a username, or a customer id. "
             "Reuse the SAME id across visits to recall earlier facts (this box keeps your "
             "last id so you can). Long-term memories take ~1-2 min to extract after a chat.",
@@ -125,6 +163,21 @@ with st.sidebar:
     if st.button("Reset (keep actor for next session)"):
         _reset_chat()
         st.rerun()
+
+    st.divider()
+    if st.button("🧠 What do you remember about me?"):
+        result = _stored_memories(st.session_state.actor_id)
+        if isinstance(result, str):
+            st.warning(result)  # an error (e.g. bad actor id)
+        elif not result:
+            st.info(
+                "No long-term memories yet for this actor. Either nothing was stored, "
+                "or extraction hasn't finished (~1-2 min after chatting)."
+            )
+        else:
+            st.success(f"{len(result)} memory(ies) stored for `{st.session_state.actor_id}`:")
+            for text in result:
+                st.write(f"• {text}")
 
 st.title("🧠 Chat")
 
