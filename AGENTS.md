@@ -184,8 +184,10 @@ bash scripts/verify_bedrock.sh
 # Provision infra (see "Infrastructure & deploy" for fresh-clone bootstrap order)
 cd infra && terraform init && terraform plan && terraform apply
 
+# Sweep one memory parameter against the probe set (LIVE: needs creds + MEMORY_ID, costs $)
+python -m harness.run --sweep top_k --values 1,3,5,10 --repeats 3 --out results/top_k.csv
+
 # --- later iterations ---
-# python -m harness.run --sweep top_k --values 1,3,5,10   # Iteration 5
 # agentcore deploy                                          # Iteration 6
 ```
 
@@ -195,6 +197,7 @@ cd infra && terraform init && terraform plan && terraform apply
 |----------|---------|------|
 | `AWS_REGION` | Region for Bedrock + AgentCore | now |
 | `BEDROCK_MODEL_ID` | The model the agent invokes (must be enabled in your account) | now |
+| `BEDROCK_TEMPERATURE` | Sampling temperature (0–1); default **0** for reproducible sweeps (ADR-008) | optional |
 | `MEMORY_ID` | The created AgentCore Memory resource (`terraform output memory_id`) | Iter 2+ |
 | `MEMORY_NAMESPACE` | Must match what the agent references at retrieval | Iter 2+ |
 | `ACTOR_ID`, `SESSION_ID` | Who/which conversation memories belong to (generated per run) | Iter 3+ |
@@ -213,9 +216,10 @@ infra/        # Terraform: IAM (Bedrock invoke), memory.tf (AgentCore Memory), c
   bootstrap/      # one-time, LOCAL state: creates the S3 state bucket
 scripts/      # verify_bedrock.sh — AWS CLI check of model access
 probes/       # probes.py (fixed (seed,question,expected) set), scoring.py (keyword scorer + ProbeResult), runner.py (run_probe: seed→time→score)
-tests/        # test_smoke.py + test_memory.py + test_probes.py (mock by default, RUN_LIVE=1 for real Bedrock/memory)
+harness/      # sweep.py (build_variant_config, run_sweep, format_table/write_csv — injectable core), run.py (CLI: --sweep/--values/--repeats/--out)
+results/      # CSV sweep artifacts (git-ignored except any you choose to commit); created on first --out run
+tests/        # test_smoke.py + test_memory.py + test_probes.py + test_harness.py (mock by default, RUN_LIVE=1 for real Bedrock/memory)
 .github/workflows/  # bootstrap.yml (one-time OIDC) + deploy.yml (CI tests + TF apply)
-# planned: harness/ (Iter 5)
 ```
 
 ---
@@ -401,12 +405,12 @@ state.
 | 2 | Create AgentCore Memory resource | ✅ Done | Terraform memory + semantic strategy; `MEMORY_ID` in env. |
 | 3 | Attach memory to the agent | ✅ Done | Injected `MemoryConfig` → `memory/` session-manager factory; `enabled=False` = baseline. |
 | 4 | Probe set + scoring | ✅ Done | Fixed `(seed, question, expected)` in `probes/`; case-insensitive keyword scorer; per-probe latency; offline tests. |
-| 5 | Sweep harness | ⬜ Not started | Sweep one param, no-memory baseline, emit table/CSV. |
+| 5 | Sweep harness | ✅ Done | `harness/` sweeps one param (top_k/relevance_score/batch_size) cross-session vs no-memory baseline; N-repeats averaged + temperature=0; table/CSV. Offline-tested. |
 | 6 | Deploy to AgentCore Runtime | ⬜ Not started | `/ping` + `/invocations`, no code change. |
 | 7 | First full sweep + writeup | ⬜ Not started | Run, read the table, explain it. |
 
 **Legend:** ⬜ Not started · 🔵 In progress · ✅ Done · ⚠️ Blocked.
-**Next up:** Iteration 5 — Sweep harness.
+**Next up:** Iteration 6 — Deploy to AgentCore Runtime.
 
 ### Definitions of done (the next few iterations)
 
@@ -420,9 +424,13 @@ state.
   (`run_probe`) plants the seed, times the question turn, and scores it — taking an
   optional separate `question_agent` so the harness can isolate long-term
   (cross-session) from short-term recall. All offline-tested (`tests/test_probes.py`).
-- **Iter 5:** `harness/` runs the full probe set per config; `--sweep <param> --values
-  <list>` works for at least `top_k`; no-memory baseline included; nondeterminism
-  handled; output table/CSV; exactly one parameter varies.
+- **Iter 5 ✅:** `harness/sweep.py` runs the full probe set per config and `harness/run.py`
+  exposes `--sweep <param> --values <list>` for `top_k`/`relevance_score`/`batch_size`;
+  `build_variant_config` changes exactly one field (ADR-003); the no-memory baseline is
+  always row 0 (ADR-007); nondeterminism handled via `--repeats` averaging + `temperature=0`
+  (ADR-008); recall measured **cross-session** (seed → flush → settle → ask on a fresh
+  session, same actor) so it reflects long-term, not short-term; table to stdout + `--out`
+  CSV. Agent factory injected → offline-tested (`tests/test_harness.py`), no AWS.
 - **Iter 6:** `/ping` + `/invocations` satisfied; `agentcore deploy` works; same memory
   resource by ID; CloudWatch logs visible.
 - **Iter 7:** one parameter swept end-to-end; short writeup explains *why*

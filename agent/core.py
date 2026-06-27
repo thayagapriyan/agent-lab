@@ -33,7 +33,11 @@ def build_model(config: AgentConfig) -> Any:
     """
     from strands.models import BedrockModel  # type: ignore[import-not-found]
 
-    return BedrockModel(model_id=config.model_id, region_name=config.region)
+    return BedrockModel(
+        model_id=config.model_id,
+        region_name=config.region,
+        temperature=config.temperature,
+    )
 
 
 def _default_memory_factory(memory_config: MemoryConfig, region: str) -> Any:

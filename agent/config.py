@@ -22,6 +22,10 @@ DEFAULT_REGION = "us-east-1"
 # not the bare foundation-model id. Verified ACTIVE and working in this account.
 # Find yours with: aws bedrock list-inference-profiles
 DEFAULT_MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+# Default to 0 for determinism: the sweep harness needs runs to be as reproducible
+# as possible so a recall change is attributable to the memory parameter, not to
+# sampling noise (ADR-008). Override with BEDROCK_TEMPERATURE.
+DEFAULT_TEMPERATURE = 0.0
 
 
 @dataclass(frozen=True)
@@ -31,12 +35,15 @@ class AgentConfig:
     region: str
     model_id: str
     system_prompt: str = "You are a concise, helpful assistant."
+    temperature: float = DEFAULT_TEMPERATURE
 
     def __post_init__(self) -> None:
         if not self.region:
             raise ValueError("AgentConfig.region must be set (env AWS_REGION).")
         if not self.model_id:
             raise ValueError("AgentConfig.model_id must be set (env BEDROCK_MODEL_ID).")
+        if not (0.0 <= self.temperature <= 1.0):
+            raise ValueError("AgentConfig.temperature must be in [0.0, 1.0].")
 
 
 @dataclass(frozen=True)
@@ -99,6 +106,7 @@ def load_config() -> AgentConfig:
     return AgentConfig(
         region=os.getenv("AWS_REGION", DEFAULT_REGION),
         model_id=os.getenv("BEDROCK_MODEL_ID", DEFAULT_MODEL_ID),
+        temperature=float(os.getenv("BEDROCK_TEMPERATURE", str(DEFAULT_TEMPERATURE))),
     )
 
 
