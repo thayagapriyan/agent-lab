@@ -212,9 +212,10 @@ ui/           # chat.py: Streamlit chat GUI — multi-turn, actor-id gate, memor
 infra/        # Terraform: IAM (Bedrock invoke), memory.tf (AgentCore Memory), cicd.tf (OIDC deploy role), S3 backend
   bootstrap/      # one-time, LOCAL state: creates the S3 state bucket
 scripts/      # verify_bedrock.sh — AWS CLI check of model access
-tests/        # test_smoke.py + test_memory.py (mock by default, RUN_LIVE=1 for real Bedrock/memory)
+probes/       # probes.py (fixed (seed,question,expected) set), scoring.py (keyword scorer + ProbeResult), runner.py (run_probe: seed→time→score)
+tests/        # test_smoke.py + test_memory.py + test_probes.py (mock by default, RUN_LIVE=1 for real Bedrock/memory)
 .github/workflows/  # bootstrap.yml (one-time OIDC) + deploy.yml (CI tests + TF apply)
-# planned: probes/ (Iter 4), harness/ (Iter 5)
+# planned: harness/ (Iter 5)
 ```
 
 ---
@@ -399,13 +400,13 @@ state.
 | 1 | Minimal local Strands agent | ✅ Done | + Terraform (Bedrock access), AWS CLI verify, verified live on AWS. |
 | 2 | Create AgentCore Memory resource | ✅ Done | Terraform memory + semantic strategy; `MEMORY_ID` in env. |
 | 3 | Attach memory to the agent | ✅ Done | Injected `MemoryConfig` → `memory/` session-manager factory; `enabled=False` = baseline. |
-| 4 | Probe set + scoring | ⬜ Not started | Fixed `(seed, question, expected)`; keyword match; latency. |
+| 4 | Probe set + scoring | ✅ Done | Fixed `(seed, question, expected)` in `probes/`; case-insensitive keyword scorer; per-probe latency; offline tests. |
 | 5 | Sweep harness | ⬜ Not started | Sweep one param, no-memory baseline, emit table/CSV. |
 | 6 | Deploy to AgentCore Runtime | ⬜ Not started | `/ping` + `/invocations`, no code change. |
 | 7 | First full sweep + writeup | ⬜ Not started | Run, read the table, explain it. |
 
 **Legend:** ⬜ Not started · 🔵 In progress · ✅ Done · ⚠️ Blocked.
-**Next up:** Iteration 4 — Probe set + scoring.
+**Next up:** Iteration 5 — Sweep harness.
 
 ### Definitions of done (the next few iterations)
 
@@ -413,8 +414,12 @@ state.
   injected `MemoryConfig`; `build_agent(memory_config=...)` attaches it; `enabled=False`
   is the no-memory baseline; `close_session_manager` flushes buffered writes. Live
   store-then-recall test gated behind `RUN_LIVE=1`.
-- **Iter 4:** `probes/` holds fixed triples; a scorer judges recall (start with
-  keyword/substring); latency captured; scoring identical across runs.
+- **Iter 4 ✅:** `probes/` holds the fixed `(seed, question, expected)` triples
+  (`probes.py`); `scoring.py` judges recall by case-insensitive keyword/substring
+  match (`score`) and carries per-probe latency (`ProbeResult`); `runner.py`
+  (`run_probe`) plants the seed, times the question turn, and scores it — taking an
+  optional separate `question_agent` so the harness can isolate long-term
+  (cross-session) from short-term recall. All offline-tested (`tests/test_probes.py`).
 - **Iter 5:** `harness/` runs the full probe set per config; `--sweep <param> --values
   <list>` works for at least `top_k`; no-memory baseline included; nondeterminism
   handled; output table/CSV; exactly one parameter varies.
