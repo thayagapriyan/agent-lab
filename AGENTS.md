@@ -187,8 +187,12 @@ cd infra && terraform init && terraform plan && terraform apply
 # Sweep one memory parameter against the probe set (LIVE: needs creds + MEMORY_ID, costs $)
 python -m harness.run --sweep top_k --values 1,3,5,10 --repeats 3 --out results/top_k.csv
 
-# --- later iterations ---
-# agentcore deploy                                          # Iteration 6
+# Serve the agent locally on the AgentCore Runtime contract (/ping + /invocations, port 8080)
+python -m agent.runtime
+
+# Deploy to AgentCore Runtime (Iteration 6): build the arm64 image, push to ECR, apply.
+# CI does this on push to main; manually it's docker buildx --platform linux/arm64 --push
+# to the runtime_ecr_url output, then `terraform apply -var=image_tag=<tag>` in infra/.
 ```
 
 ### Environment / config (externalize everything; hardcode nothing)
@@ -406,11 +410,11 @@ state.
 | 3 | Attach memory to the agent | ✅ Done | Injected `MemoryConfig` → `memory/` session-manager factory; `enabled=False` = baseline. |
 | 4 | Probe set + scoring | ✅ Done | Fixed `(seed, question, expected)` in `probes/`; case-insensitive keyword scorer; per-probe latency; offline tests. |
 | 5 | Sweep harness | ✅ Done | `harness/` sweeps one param (top_k/relevance_score/batch_size) cross-session vs no-memory baseline; N-repeats averaged + temperature=0; table/CSV. Offline-tested. |
-| 6 | Deploy to AgentCore Runtime | ⬜ Not started | `/ping` + `/invocations`, no code change. |
+| 6 | Deploy to AgentCore Runtime | 🔵 In progress | `agent/runtime.py` serves `/ping`+`/invocations` via `BedrockAgentCoreApp` (no agent change); `Dockerfile` (arm64); `infra/runtime.tf` = ECR + runtime + role (Bedrock+Memory+ECR+logs); CI builds/pushes then applies + smoke-tests. Offline-tested. **Not yet applied to AWS.** |
 | 7 | First full sweep + writeup | ⬜ Not started | Run, read the table, explain it. |
 
 **Legend:** ⬜ Not started · 🔵 In progress · ✅ Done · ⚠️ Blocked.
-**Next up:** Iteration 6 — Deploy to AgentCore Runtime.
+**Next up:** Finish Iteration 6 — run the deploy (CI on push to main, or manual build/push + `terraform apply`), confirm the live smoke test, then mark Done.
 
 ### Definitions of done (the next few iterations)
 
@@ -431,8 +435,16 @@ state.
   (ADR-008); recall measured **cross-session** (seed → flush → settle → ask on a fresh
   session, same actor) so it reflects long-term, not short-term; table to stdout + `--out`
   CSV. Agent factory injected → offline-tested (`tests/test_harness.py`), no AWS.
-- **Iter 6:** `/ping` + `/invocations` satisfied; `agentcore deploy` works; same memory
-  resource by ID; CloudWatch logs visible.
+- **Iter 6 🔵:** `agent/runtime.py` serves `/ping` + `/invocations` via the SDK's
+  `BedrockAgentCoreApp` — a thin transport over `run_once`, no agent/config/memory
+  change ("served two ways"). `Dockerfile` builds the arm64 serving image (no dev/UI
+  deps). `infra/runtime.tf` adds ECR + the AgentCore Runtime + an execution role scoped
+  to ECR pull / CloudWatch logs / Bedrock invoke / **this lab's Memory resource**, with
+  `MEMORY_ID`/`MEMORY_NAMESPACE`/`BEDROCK_MODEL_ID` passed as runtime env (same config
+  by ID). Flat resources, not the sibling's module — one agent. CI (`deploy.yml`)
+  ensures the ECR repo, builds+pushes arm64, applies with `image_tag=<sha>`, then
+  invokes the live runtime as a smoke test. Offline-tested (`tests/test_runtime.py`).
+  **Remaining for Done:** an actual deploy + the live smoke test passing.
 - **Iter 7:** one parameter swept end-to-end; short writeup explains *why*
   recall/relevance/latency moved.
 

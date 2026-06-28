@@ -53,16 +53,72 @@ jobs:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
+      - name: ECR login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: docker/setup-buildx-action@v3
+
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.15.4
 
+      - name: Terraform init
+        working-directory: infra
+        run: terraform init
+
+      # Chicken-and-egg: the runtime must point at an image that already exists, but
+      # the ECR repo is a TF resource. So make the repo exist (and be in state) BEFORE
+      # the build, idempotently — create via the ECR API if AWS lacks it, import into
+      # state if TF isn't tracking it (first deploy, or after out-of-band deletion).
+      # The full apply below still owns and reconciles everything. (Pattern from the
+      # sibling agentcore-multiagent deploy; one agent here, so one repo.)
+      - name: Ensure ECR repository
+        id: ecr_repo
+        working-directory: infra
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+        run: |
+          REPO=$(sed -n '/variable "runtime_name"/,/}/ s/.*default *= *"\([^"]*\)".*/\1/p' variables.tf)
+          [ -n "$REPO" ] || { echo "could not resolve runtime_name default" >&2; exit 1; }
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          aws ecr describe-repositories --repository-names "$REPO" --region "$AWS_REGION" >/dev/null 2>&1 \
+            || aws ecr create-repository --repository-name "$REPO" --region "$AWS_REGION" >/dev/null
+          terraform state list aws_ecr_repository.runtime >/dev/null 2>&1 \
+            || terraform import aws_ecr_repository.runtime "$REPO"
+          echo "url=${ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com/${REPO}" >> "$GITHUB_OUTPUT"
+
+      # AgentCore Runtime runs arm64. Tag with the git sha (what the apply deploys)
+      # and latest. Push BEFORE apply so the runtime's container_uri resolves.
+      - name: Build & push (ARM64)
+        env:
+          ECR_URI: ${{ steps.ecr_repo.outputs.url }}
+        run: |
+          docker buildx build \
+            --platform linux/arm64 \
+            --push \
+            -t "$ECR_URI:${{ github.sha }}" \
+            -t "$ECR_URI:latest" \
+            .
+
       # The main infra/ config uses the S3 backend (infra/backend.tf). Account-wide
-      # singletons (the OIDC provider + shared state bucket) live in the aws-foundation
-      # repo and are referenced here, not created — so nothing extra is applied.
+      # singletons (OIDC provider + shared state bucket) live in aws-foundation and are
+      # referenced, not created. image_tag pins the runtime to the sha we just pushed.
       - name: Terraform apply (infra/)
         working-directory: infra
         run: |
-          terraform init
-          terraform apply -auto-approve
+          terraform apply -auto-approve -var="image_tag=${{ github.sha }}"
           terraform output
+
+      # Deployed-state check: invoke the live runtime and require a reply field, proving
+      # the /invocations door + the agent round-trip work in the container.
+      - name: Smoke test (deployed runtime)
+        working-directory: infra
+        run: |
+          ARN=$(terraform output -raw runtime_arn)
+          aws bedrock-agentcore invoke-agent-runtime \
+            --agent-runtime-arn "$ARN" \
+            --payload "$(printf '%s' '{"prompt":"Reply with the single word: pong"}' | base64)" \
+            --region "${{ vars.AWS_REGION }}" \
+            smoke.json
+          cat smoke.json
+          grep -q reply smoke.json

@@ -27,6 +27,20 @@ variable "trusted_principals" {
   default     = ["bedrock-agentcore.amazonaws.com"]
 }
 
+# --- Runtime (Iteration 6) ---
+
+variable "runtime_name" {
+  description = "Name for the AgentCore Runtime + its ECR repo + IAM role (a-z, 0-9, -)."
+  type        = string
+  default     = "agent-memory-lab"
+}
+
+variable "image_tag" {
+  description = "ECR image tag the runtime deploys. CI sets this to the git sha; defaults to latest for manual applies."
+  type        = string
+  default     = "latest"
+}
+
 # --- Memory (Iteration 2) ---
 
 variable "memory_name" {

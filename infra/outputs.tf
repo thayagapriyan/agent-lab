@@ -34,3 +34,20 @@ output "memory_namespace" {
   description = "Namespace the semantic strategy stores under (must match at retrieval)."
   value       = var.memory_namespace
 }
+
+# --- Runtime (Iteration 6) ---
+
+output "runtime_ecr_url" {
+  description = "Push the agent container image here (CI builds + pushes before apply)."
+  value       = aws_ecr_repository.runtime.repository_url
+}
+
+output "runtime_arn" {
+  description = "AgentCore Runtime ARN — pass to: aws bedrock-agentcore invoke-agent-runtime --agent-runtime-arn"
+  value       = aws_bedrockagentcore_agent_runtime.agent.agent_runtime_arn
+}
+
+output "runtime_id" {
+  description = "AgentCore Runtime id."
+  value       = aws_bedrockagentcore_agent_runtime.agent.agent_runtime_id
+}
