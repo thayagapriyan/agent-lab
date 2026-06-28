@@ -410,11 +410,11 @@ state.
 | 3 | Attach memory to the agent | ✅ Done | Injected `MemoryConfig` → `memory/` session-manager factory; `enabled=False` = baseline. |
 | 4 | Probe set + scoring | ✅ Done | Fixed `(seed, question, expected)` in `probes/`; case-insensitive keyword scorer; per-probe latency; offline tests. |
 | 5 | Sweep harness | ✅ Done | `harness/` sweeps one param (top_k/relevance_score/batch_size) cross-session vs no-memory baseline; N-repeats averaged + temperature=0; table/CSV. Offline-tested. |
-| 6 | Deploy to AgentCore Runtime | 🔵 In progress | `agent/runtime.py` serves `/ping`+`/invocations` via `BedrockAgentCoreApp` (no agent change); `Dockerfile` (arm64); `infra/runtime.tf` = ECR + runtime + role (Bedrock+Memory+ECR+logs); CI builds/pushes then applies + smoke-tests. Offline-tested. **Not yet applied to AWS.** |
-| 7 | First full sweep + writeup | ⬜ Not started | Run, read the table, explain it. |
+| 6 | Deploy to AgentCore Runtime | ✅ Done | `agent/runtime.py` serves `/ping`+`/invocations` via `BedrockAgentCoreApp` (no agent change); `Dockerfile` (arm64); `infra/runtime.tf` = ECR + runtime + role (Bedrock+Memory+ECR+logs); CI builds/pushes, applies, then smoke-tests the live runtime. Deployed; CI green. |
+| 7 | First full sweep + writeup | 🔵 In progress | Run, read the table, explain it. |
 
 **Legend:** ⬜ Not started · 🔵 In progress · ✅ Done · ⚠️ Blocked.
-**Next up:** Finish Iteration 6 — run the deploy (CI on push to main, or manual build/push + `terraform apply`), confirm the live smoke test, then mark Done.
+**Next up:** Iteration 7 — run the first full sweep against the deployed runtime, read the recall/latency table, and write up *why* the numbers moved.
 
 ### Definitions of done (the next few iterations)
 
